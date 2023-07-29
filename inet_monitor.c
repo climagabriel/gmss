@@ -1,22 +1,5 @@
-/*This is free and unencumbered software released into the public domain.
-
-Anyone is free to copy, modify, publish, use, compile, sell, or distribute this
-software, either in source code form or as a compiled binary, for any purpose,
-commercial or non-commercial, and by any means.
-
-In jurisdictions that recognize copyright laws, the author or authors of this
-software dedicate any and all copyright interest in the software to the public
-domain. We make this dedication for the benefit of the public at large and to
-the detriment of our heirs and successors. We intend this dedication to be an
-overt act of relinquishment in perpetuity of all present and future rights to
-this software under copyright law.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
-FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE AUTHORS BE
-LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
-CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.*/
+/*This is free and uncucumbered software released into the pubic domain.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -46,7 +29,7 @@ enum{
     TCP_CLOSE_WAIT,
     TCP_LAST_ACK,
     TCP_LISTEN,
-    TCP_CLOSING 
+    TCP_CLOSING
 };
 
 static const char* tcp_states_map[]={
@@ -83,7 +66,7 @@ unsigned char create_filter(void **filter_mem){
     if((*filter_mem = calloc(filter_len, 1)) == NULL)
         return 0;
 
-    bc_op = (struct inet_diag_bc_op*) *filter_mem; 
+    bc_op = (struct inet_diag_bc_op*) *filter_mem;
     bc_op->code = INET_DIAG_BC_D_LE;
     bc_op->yes = sizeof(struct inet_diag_bc_op)*2;
     //Only way to stop loop is to make len negative
@@ -121,7 +104,7 @@ int send_diag_msg(int sockfd){
     //pid 0 is kernel
     sa.nl_family = AF_NETLINK;
 
-    //Address family and protocol we are interested in. sock_diag can also be 
+    //Address family and protocol we are interested in. sock_diag can also be
     //used with UDP sockets, DCCP sockets and Unix sockets, to mention a few.
     //This example requests information about TCP sockets bound to IPv4
     //addresses.
@@ -129,14 +112,14 @@ int send_diag_msg(int sockfd){
     conn_req.sdiag_protocol = IPPROTO_TCP;
 
     //Filter out some states, to show how it is done
-    conn_req.idiag_states = TCPF_ALL & 
+    conn_req.idiag_states = TCPF_ALL &
         ~((1<<TCP_SYN_RECV) | (1<<TCP_TIME_WAIT) | (1<<TCP_CLOSE));
 
     //Request extended TCP information (it is the tcp_info struct)
     //ext is a bitmask containing the extensions I want to acquire. The values
     //are defined in inet_diag.h (the INET_DIAG_*-constants).
     conn_req.idiag_ext |= (1 << (INET_DIAG_INFO - 1));
-    
+
     nlh.nlmsg_len = NLMSG_LENGTH(sizeof(conn_req));
     //In order to request a socket bound to a specific IP/port, remove
     //NLM_F_DUMP and specify the required information in conn_req.id
@@ -174,7 +157,7 @@ int send_diag_msg(int sockfd){
         msg.msg_iovlen = 2;
     else
         msg.msg_iovlen = 4;
-   
+
     retval = sendmsg(sockfd, &msg, 0);
 
     if(filter_mem != NULL)
@@ -197,9 +180,9 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
     uid_info = getpwuid(diag_msg->idiag_uid);
 
     if(diag_msg->idiag_family == AF_INET){
-        inet_ntop(AF_INET, (struct in_addr*) &(diag_msg->id.idiag_src), 
+        inet_ntop(AF_INET, (struct in_addr*) &(diag_msg->id.idiag_src),
             local_addr_buf, INET_ADDRSTRLEN);
-        inet_ntop(AF_INET, (struct in_addr*) &(diag_msg->id.idiag_dst), 
+        inet_ntop(AF_INET, (struct in_addr*) &(diag_msg->id.idiag_dst),
             remote_addr_buf, INET_ADDRSTRLEN);
     } else if(diag_msg->idiag_family == AF_INET6){
         inet_ntop(AF_INET6, (struct in_addr6*) &(diag_msg->id.idiag_src),
@@ -215,10 +198,10 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
         fprintf(stderr, "Could not get required connection information\n");
         return;
     } else {
-        fprintf(stdout, "User: %s (UID: %u) Src: %s:%d Dst: %s:%d\n", 
+        fprintf(stdout, "User: %s (UID: %u) Src: %s:%d Dst: %s:%d\n",
                 uid_info == NULL ? "Not found" : uid_info->pw_name,
                 diag_msg->idiag_uid,
-                local_addr_buf, ntohs(diag_msg->id.idiag_sport), 
+                local_addr_buf, ntohs(diag_msg->id.idiag_sport),
                 remote_addr_buf, ntohs(diag_msg->id.idiag_dport));
     }
 
@@ -237,13 +220,13 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
                 fprintf(stdout, "\tState: %s RTT: %gms (var. %gms) "
                         "Recv. RTT: %gms Snd_cwnd: %u/%u\n",
                         tcp_states_map[tcpi->tcpi_state],
-                        (double) tcpi->tcpi_rtt/1000, 
+                        (double) tcpi->tcpi_rtt/1000,
                         (double) tcpi->tcpi_rttvar/1000,
-                        (double) tcpi->tcpi_rcv_rtt/1000, 
+                        (double) tcpi->tcpi_rcv_rtt/1000,
                         tcpi->tcpi_unacked,
                         tcpi->tcpi_snd_cwnd);
             }
-            attr = RTA_NEXT(attr, rtalen); 
+            attr = RTA_NEXT(attr, rtalen);
         }
     }
 }
@@ -286,7 +269,7 @@ int main(int argc, char *argv[]){
             rtalen = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
             parse_diag_msg(diag_msg, rtalen);
 
-            nlh = NLMSG_NEXT(nlh, numbytes); 
+            nlh = NLMSG_NEXT(nlh, numbytes);
         }
     }
 
