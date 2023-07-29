@@ -83,11 +83,9 @@ unsigned char create_filter(void **filter_mem){
 int send_diag_msg(int sockfd){
     struct msghdr msg;
     struct nlmsghdr nlh;
-    //To request information about unix sockets, this would be replaced with
-    //unix_diag_req, packet-sockets packet_diag_req.
     struct inet_diag_req_v2 conn_req;
     struct sockaddr_nl sa;
-    struct iovec iov[4];
+    struct iovec iov[4]; // 2 if no filter
     int retval = 0;
 
     //For the filter
@@ -100,8 +98,6 @@ int send_diag_msg(int sockfd){
     memset(&nlh, 0, sizeof(nlh));
     memset(&conn_req, 0, sizeof(conn_req));
 
-    //No need to specify groups or pid. This message only has one receiver and
-    //pid 0 is kernel
     sa.nl_family = AF_NETLINK;
 
     //Address family and protocol we are interested in. sock_diag can also be
@@ -149,7 +145,7 @@ int send_diag_msg(int sockfd){
     }
 #endif
 
-    //Set essage correctly
+    //Set message correctly
     msg.msg_name = (void*) &sa;
     msg.msg_namelen = sizeof(sa);
     msg.msg_iov = iov;
@@ -169,12 +165,9 @@ int send_diag_msg(int sockfd){
 void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
     struct rtattr *attr;
     struct tcp_info *tcpi;
-    char local_addr_buf[INET6_ADDRSTRLEN];
-    char remote_addr_buf[INET6_ADDRSTRLEN];
     struct passwd *uid_info = NULL;
-
-    memset(local_addr_buf, 0, sizeof(local_addr_buf));
-    memset(remote_addr_buf, 0, sizeof(remote_addr_buf));
+    char local_addr_buf[INET6_ADDRSTRLEN]  = {0};
+    char remote_addr_buf[INET6_ADDRSTRLEN] = {0};
 
     //(Try to) Get user info
     uid_info = getpwuid(diag_msg->idiag_uid);
@@ -189,6 +182,7 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
                 local_addr_buf, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, (struct in_addr6*) &(diag_msg->id.idiag_dst),
                 remote_addr_buf, INET6_ADDRSTRLEN);
+    //fucking horrendous
     } else {
         fprintf(stderr, "Unknown family\n");
         return;
@@ -198,11 +192,12 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
         fprintf(stderr, "Could not get required connection information\n");
         return;
     } else {
-        fprintf(stdout, "User: %s (UID: %u) Src: %s:%d Dst: %s:%d\n",
-                uid_info == NULL ? "Not found" : uid_info->pw_name,
-                diag_msg->idiag_uid,
-                local_addr_buf, ntohs(diag_msg->id.idiag_sport),
-                remote_addr_buf, ntohs(diag_msg->id.idiag_dport));
+//        fprintf(stdout, "User: %s (UID: %u) Src: %s:%d Dst: %s:%d\n",
+//                uid_info == NULL ? "Not found" : uid_info->pw_name,
+//                diag_msg->idiag_uid,
+//                local_addr_buf, ntohs(diag_msg->id.idiag_sport),
+//                remote_addr_buf, ntohs(diag_msg->id.idiag_dport));
+                ;
     }
 
     //Parse the attributes of the netlink message in search of the
@@ -217,28 +212,28 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
                 tcpi = (struct tcp_info*) RTA_DATA(attr);
 
                 //Output some sample data
-                fprintf(stdout, "\tState: %s RTT: %gms (var. %gms) "
-                        "Recv. RTT: %gms Snd_cwnd: %u/%u\n",
+                fprintf(stdout, "state:%s snd_mss:%d rcv_mss:%d"
+                        "pmtu:%d advmss:%d\n",
                         tcp_states_map[tcpi->tcpi_state],
-                        (double) tcpi->tcpi_rtt/1000,
-                        (double) tcpi->tcpi_rttvar/1000,
-                        (double) tcpi->tcpi_rcv_rtt/1000,
-                        tcpi->tcpi_unacked,
-                        tcpi->tcpi_snd_cwnd);
+                        tcpi->tcpi_snd_mss,
+                        tcpi->tcpi_rcv_mss,
+                        tcpi->tcpi_pmtu,
+                        tcpi->tcpi_advmss);
             }
             attr = RTA_NEXT(attr, rtalen);
         }
     }
 }
 
-int main(int argc, char *argv[]){
+int main(){ // doesn't actually take args now, replace with (int argc, char *argv[]) later
+
     int nl_sock = 0, numbytes = 0, rtalen = 0;
     struct nlmsghdr *nlh;
     uint8_t recv_buf[SOCKET_BUFFER_SIZE];
     struct inet_diag_msg *diag_msg;
 
     //Create the monitoring socket
-    if((nl_sock = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_INET_DIAG)) == -1){
+    if((nl_sock = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_SOCK_DIAG)) == -1){
         perror("socket: ");
         return EXIT_FAILURE;
     }
