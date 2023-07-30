@@ -1,5 +1,6 @@
 /*This is free and uncucumbered software released into the pubic domain.
 */
+// kudos for anything of value here should go to https://github.com/kristrev/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -182,7 +183,6 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
                 local_addr_buf, INET6_ADDRSTRLEN);
         inet_ntop(AF_INET6, (struct in_addr6*) &(diag_msg->id.idiag_dst),
                 remote_addr_buf, INET6_ADDRSTRLEN);
-    //fucking horrendous
     } else {
         fprintf(stderr, "Unknown family\n");
         return;
@@ -192,81 +192,64 @@ void parse_diag_msg(struct inet_diag_msg *diag_msg, int rtalen){
         fprintf(stderr, "Could not get required connection information\n");
         return;
     } else {
-//        fprintf(stdout, "User: %s (UID: %u) Src: %s:%d Dst: %s:%d\n",
-//                uid_info == NULL ? "Not found" : uid_info->pw_name,
-//                diag_msg->idiag_uid,
-//                local_addr_buf, ntohs(diag_msg->id.idiag_sport),
-//                remote_addr_buf, ntohs(diag_msg->id.idiag_dport));
-                ;
+        fprintf(stdout, "User: %s (UID: %u) Src: %s:%d Dst: %s:%d\n",
+                uid_info == NULL ? "Not found" : uid_info->pw_name,
+                diag_msg->idiag_uid,
+                local_addr_buf, ntohs(diag_msg->id.idiag_sport),
+                remote_addr_buf, ntohs(diag_msg->id.idiag_dport));
     }
-
-    //Parse the attributes of the netlink message in search of the
-    //INET_DIAG_INFO-attribute
-    if(rtalen > 0){
-        attr = (struct rtattr*) (diag_msg+1);
-
-        while(RTA_OK(attr, rtalen)){
-            if(attr->rta_type == INET_DIAG_INFO){
-                //The payload of this attribute is a tcp_info-struct, so it is
-                //ok to cast
-                tcpi = (struct tcp_info*) RTA_DATA(attr);
-
-                //Output some sample data
-                fprintf(stdout, "state:%s snd_mss:%d rcv_mss:%d"
-                        "pmtu:%d advmss:%d\n",
-                        tcp_states_map[tcpi->tcpi_state],
-                        tcpi->tcpi_snd_mss,
-                        tcpi->tcpi_rcv_mss,
-                        tcpi->tcpi_pmtu,
-                        tcpi->tcpi_advmss);
-            }
-            attr = RTA_NEXT(attr, rtalen);
-        }
-    }
+    //Parse the attributes of the netlink message in search of the INET_DIAG_INFO-attribute
+//    if(rtalen > 0){
+//        attr = (struct rtattr*) (diag_msg+1);
+//
+//        while(RTA_OK(attr, rtalen)){
+//            if(attr->rta_type == INET_DIAG_INFO){ //The payload of this attribute is a tcp_info-struct, so it is ok to cast
+//                tcpi = (struct tcp_info*) RTA_DATA(attr);
+//                printf("state:%s snd_mss:%d rcv_mss:%d pmtu:%d advmss:%d\n",
+//                        tcp_states_map[tcpi->tcpi_state],
+//                        tcpi->tcpi_snd_mss,
+//                        tcpi->tcpi_rcv_mss,
+//                        tcpi->tcpi_pmtu,
+//                        tcpi->tcpi_advmss);
+//            }
+//            attr = RTA_NEXT(attr, rtalen);
+//        }
+//    }
 }
 
 int main(){ // doesn't actually take args now, replace with (int argc, char *argv[]) later
-
     int nl_sock = 0, numbytes = 0, rtalen = 0;
     struct nlmsghdr *nlh;
     uint8_t recv_buf[SOCKET_BUFFER_SIZE];
     struct inet_diag_msg *diag_msg;
-
     //Create the monitoring socket
     if((nl_sock = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_SOCK_DIAG)) == -1){
         perror("socket: ");
         return EXIT_FAILURE;
     }
-
     //Send the request for the sockets we are interested in
     if(send_diag_msg(nl_sock) < 0){
         perror("sendmsg: ");
         return EXIT_FAILURE;
     }
-
     //The requests can (will in most cases) come as multiple netlink messages. I
     //need to receive all of them. Assumes no packet loss, so if the last packet
     //(the packet with NLMSG_DONE) is lost, the application will hang.
     while(1){
         numbytes = recv(nl_sock, recv_buf, sizeof(recv_buf), 0);
         nlh = (struct nlmsghdr*) recv_buf;
-
         while(NLMSG_OK(nlh, numbytes)){
             if(nlh->nlmsg_type == NLMSG_DONE)
                 return EXIT_SUCCESS;
-
             if(nlh->nlmsg_type == NLMSG_ERROR){
                 fprintf(stderr, "Error in netlink message\n");
                 return EXIT_FAILURE;
             }
-
             diag_msg = (struct inet_diag_msg*) NLMSG_DATA(nlh);
             rtalen = nlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
             parse_diag_msg(diag_msg, rtalen);
-
             nlh = NLMSG_NEXT(nlh, numbytes);
         }
     }
-
     return EXIT_SUCCESS;
 }
