@@ -1,15 +1,13 @@
-/* Do not touch this file unless you can:
- * 1. simplify
- * 2. improve readability
- * 3. improve aesthetics
- *
- * Createa a copy and add features elsewhere.
+/* We keep this file for aesthetic enjoyment.
+ * Contributions are welcome if they improve the clarity of the code.
+ * Feel free to add insightful comments.
  */
 
-#include <asm/types.h>
-#include <sys/socket.h>
+//#include <asm/types.h>
+//#include <sys/socket.h>
+//#include <linux/netlink.h>
+//#include <linux/rtnetlink.h> // defines the rtattr struct and RTA_* macros
 #include <linux/netlink.h>
-#include <linux/rtnetlink.h>
 #include <netinet/in.h>
 #include <linux/tcp.h>
 #include <linux/sock_diag.h>
@@ -20,6 +18,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+//inspired by libnml git://git.netfilter.org/libmnl
 #define SOCKET_BUFFER_SIZE ( sysconf(_SC_PAGESIZE) < 8192L ? sysconf(_SC_PAGESIZE) : 8192L )
 
 //Kernel TCP states. /include/net/tcp_states.h
@@ -37,7 +36,7 @@ enum{
     TCP_CLOSING
 };
 
-static const char* tcp_states_map[]={
+static const char* tcp_states_map[]={ // array of pointers
     [TCP_ESTABLISHED] = "ESTABLISHED",
     [TCP_SYN_SENT] = "SYN-SENT",
     [TCP_SYN_RECV] = "SYN-RECV",
@@ -108,7 +107,7 @@ int main() { // takes no args for now, replace with (int argc, char *argv[]) lat
 			}
 			struct inet_diag_msg *diag_msg = (struct inet_diag_msg *) NLMSG_DATA(recvnlh);
 			char src_addr_buf[INET_ADDRSTRLEN];
-			printf("src:%-16s ", inet_ntop(AF_INET, &diag_msg->id.idiag_dst, src_addr_buf, sizeof(buf)));
+			printf("src:%-16s ", inet_ntop(AF_INET, &diag_msg->id.idiag_src, src_addr_buf, sizeof(buf)));
 			struct rtattr *attr = (struct rtattr *) (diag_msg + 1);
 			unsigned int rtattrlen = recvnlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
 			while (RTA_OK(attr, rtattrlen)) {
