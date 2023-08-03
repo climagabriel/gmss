@@ -107,7 +107,7 @@ int main() { // takes no args for now, replace with (int argc, char *argv[]) lat
 				return EXIT_FAILURE;
 			}
 			struct inet_diag_msg *diag_msg = (struct inet_diag_msg *) NLMSG_DATA(recvnlh);
-			char src_addr_buf[INET_ADDRSTRLEN];
+			char src_addr_buf[INET6_ADDRSTRLEN];
 			printf("src:%-16s ", inet_ntop(AF_INET, &diag_msg->id.idiag_src, src_addr_buf, sizeof(buf)));
 			struct rtattr *attr = (struct rtattr *) (diag_msg + 1);
 			unsigned int rtattrlen = recvnlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
