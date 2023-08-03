@@ -3,10 +3,10 @@
  * Feel free to add insightful comments.
  */
 
-//#include <asm/types.h>
-//#include <sys/socket.h>
-//#include <linux/netlink.h>
-//#include <linux/rtnetlink.h> // defines the rtattr struct and RTA_* macros
+#include <asm/types.h>
+#include <sys/socket.h>
+#include <linux/netlink.h>
+#include <linux/rtnetlink.h> // RTA_* macros for struct rtattr (optinoal attributes after the nlmsghdr)
 #include <linux/netlink.h>
 #include <netinet/in.h>
 #include <linux/tcp.h>
@@ -84,7 +84,7 @@ int main() { // takes no args for now, replace with (int argc, char *argv[]) lat
 	struct msghdr msg = {
 		.msg_name    = (void *) &sa,
 		.msg_namelen = sizeof(sa),
-		.msg_iov     = iov,         // pointer to array of iovec structs
+		.msg_iov     = iov,          // pointer to array of "io vector" structs
 		.msg_iovlen  = 2,            // number of elements in the array
 	};
 
@@ -113,6 +113,7 @@ int main() { // takes no args for now, replace with (int argc, char *argv[]) lat
 			while (RTA_OK(attr, rtattrlen)) {
 				if (attr->rta_type == INET_DIAG_INFO) {
 					struct tcp_info *tcpi = (struct tcp_info *) RTA_DATA(attr);
+					//https://elixir.bootlin.com/linux/v5.3.8/source/include/uapi/linux/tcp.h#L206
 					fprintf(stdout, "state:%-11s snd_mss:%-6d rcv_mss:%-6d pmtu:%-6d advmss:%-6d\n",
 							tcp_states_map[tcpi->tcpi_state],
 							tcpi->tcpi_snd_mss,
