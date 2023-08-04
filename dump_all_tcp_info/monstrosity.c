@@ -1,8 +1,3 @@
-/* We keep this file for aesthetic enjoyment.
- * Contributions are welcome if they improve the clarity of the code.
- * Feel free to add insightful comments.
- */
-
 #include <asm/types.h>
 #include <sys/socket.h>
 #include <linux/netlink.h>
@@ -18,6 +13,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include "dump_tcp_info_struct.h"
+#include "dump_inet_diag_msg.h"
 
 //inspired by libnml git://git.netfilter.org/libmnl
 #define SOCKET_BUFFER_SIZE ( sysconf(_SC_PAGESIZE) < 8192L ? sysconf(_SC_PAGESIZE) : 8192L )
@@ -53,8 +49,15 @@ static const char* tcp_states_map[]={ // array of pointers
 
 #define TCPF_ALL 0xFFF
 
-int main() { // takes no args for now, replace with (int argc, char *argv[]) later
+int main(int argc, char *argv[]) { // takes no args for now, replace with (int argc, char *argv[]) later
 	//printf("%d\n", netlink_socket);
+	//char format = argv[1][0];
+	char format;
+	if (argc == 1) {
+		format = 'l';
+	} else { format = argv[1][0];
+	}
+
 	struct iovec iov[2] = {0};
 
 	struct nlmsghdr nlhdr = {
@@ -102,20 +105,19 @@ int main() { // takes no args for now, replace with (int argc, char *argv[]) lat
 			if(recvnlh->nlmsg_type == NLMSG_DONE) {
 				printf(" Done\n");
 				return EXIT_SUCCESS;
-			} else if(recvnlh->nlmsg_type == NLMSG_ERROR) { //Wou%ld NLMSG_OK equal 1 if there was an error?
+			} else if(recvnlh->nlmsg_type == NLMSG_ERROR) { //Would NLMSG_OK equal 1 if there was an error?
 				printf("Error\n");
 				return EXIT_FAILURE;
 			}
 			struct inet_diag_msg *diag_msg = (struct inet_diag_msg *) NLMSG_DATA(recvnlh);
-			char src_addr_buf[INET6_ADDRSTRLEN];
-			printf("src:%-16s ", inet_ntop(AF_INET, &diag_msg->id.idiag_src, src_addr_buf, sizeof(buf)));
+			dump_inet_diag_msg(diag_msg);
 			struct rtattr *attr = (struct rtattr *) (diag_msg + 1);
 			unsigned int rtattrlen = recvnlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
 			while (RTA_OK(attr, rtattrlen)) {
 				if (attr->rta_type == INET_DIAG_INFO) {
 					struct tcp_info *tcpi = (struct tcp_info *) RTA_DATA(attr);
 					//https://elixir.bootlin.com/linux/v5.3.8/source/include/uapi/linux/tcp.h#L206
-					dump_tcp_info_struct(tcpi);
+					dump_tcp_info_struct(tcpi, format);
 				}
 				attr = RTA_NEXT(attr, rtattrlen);
 			}
