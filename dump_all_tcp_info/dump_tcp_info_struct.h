@@ -4,12 +4,42 @@
 #include <linux/tcp.h>
 #include <stdio.h>
 
+//Kernel TCP states. /include/net/tcp_states.h
+enum{
+    TCP_ESTABLISHED = 1,
+    TCP_SYN_SENT,
+    TCP_SYN_RECV,
+    TCP_FIN_WAIT1,
+    TCP_FIN_WAIT2,
+    TCP_TIME_WAIT,
+    TCP_CLOSE,
+    TCP_CLOSE_WAIT,
+    TCP_LAST_ACK,
+    TCP_LISTEN,
+    TCP_CLOSING
+};
+
+static const char* tcp_states_map[]={ // array of pointers
+    [TCP_ESTABLISHED] = "ESTABLISHED",
+    [TCP_SYN_SENT] = "SYN-SENT",
+    [TCP_SYN_RECV] = "SYN-RECV",
+    [TCP_FIN_WAIT1] = "FIN-WAIT-1",
+    [TCP_FIN_WAIT2] = "FIN-WAIT-2",
+    [TCP_TIME_WAIT] = "TIME-WAIT",
+    [TCP_CLOSE] = "CLOSE",
+    [TCP_CLOSE_WAIT] = "CLOSE-WAIT",
+    [TCP_LAST_ACK] = "LAST-ACK",
+    [TCP_LISTEN] = "LISTEN",
+    [TCP_CLOSING] = "CLOSING"
+};
+
+
 int dump_tcp_info_struct(struct tcp_info* tcpi, char format);
 
 int dump_tcp_info_struct(struct tcp_info* tcpi, char format) {
 	if (format != 'v') {
-		printf("state:%ld ca_state:%ld retransmits:%ld probes:%ld backoff:%ld options:%ld snd_wscale:%ld rcv_wscale:%ld delivery_rate_app_limited:%ld rto:%ld ato:%ld snd_mss:%ld rcv_mss:%ld unacked:%ld sacked:%ld lost:%ld retrans:%ld fackets:%ld last_data_sent:%ld last_ack_sent:%ld last_data_recv:%ld last_ack_recv:%ld pmtu:%ld rcv_ssthresh:%ld rtt:%ld rttvar:%ld snd_ssthresh:%ld snd_cwnd:%ld advmss:%ld reordering:%ld rcv_rtt:%ld rcv_space:%ld total_retrans:%ld pacing_rate:%ld max_pacing_rate:%ld bytes_acked:%ld bytes_received:%ld segs_out:%ld segs_in:%ld notsent_bytes:%ld min_rtt:%ld data_segs_in:%ld data_segs_out:%ld delivery_rate:%ld busy_time:%ld rwnd_limited:%ld sndbuf_limited:%ld delivered:%ld delivered_ce:%ld bytes_sent:%ld bytes_retrans:%ld dsack_dups:%ld reord_seen:%ld\n\n\n",
-                       tcpi->tcpi_state,
+		printf("state:%s ca_state:%ld retransmits:%ld probes:%ld backoff:%ld options:%ld snd_wscale:%ld rcv_wscale:%ld delivery_rate_app_limited:%ld rto:%ld ato:%ld snd_mss:%ld rcv_mss:%ld unacked:%ld sacked:%ld lost:%ld retrans:%ld fackets:%ld last_data_sent:%ld last_ack_sent:%ld last_data_recv:%ld last_ack_recv:%ld pmtu:%ld rcv_ssthresh:%ld rtt:%ld rttvar:%ld snd_ssthresh:%ld snd_cwnd:%ld advmss:%ld reordering:%ld rcv_rtt:%ld rcv_space:%ld total_retrans:%ld pacing_rate:%ld max_pacing_rate:%ld bytes_acked:%ld bytes_received:%ld segs_out:%ld segs_in:%ld notsent_bytes:%ld min_rtt:%ld data_segs_in:%ld data_segs_out:%ld delivery_rate:%ld busy_time:%ld rwnd_limited:%ld sndbuf_limited:%ld delivered:%ld delivered_ce:%ld bytes_sent:%ld bytes_retrans:%ld dsack_dups:%ld reord_seen:%ld\n\n\n",
+                       tcp_states_map[tcpi->tcpi_state],
                        tcpi->tcpi_ca_state,
                        tcpi->tcpi_retransmits,
                        tcpi->tcpi_probes,

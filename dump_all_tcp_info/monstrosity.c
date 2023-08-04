@@ -17,36 +17,6 @@
 
 //inspired by libnml git://git.netfilter.org/libmnl
 #define SOCKET_BUFFER_SIZE ( sysconf(_SC_PAGESIZE) < 8192L ? sysconf(_SC_PAGESIZE) : 8192L )
-
-//Kernel TCP states. /include/net/tcp_states.h
-enum{
-    TCP_ESTABLISHED = 1,
-    TCP_SYN_SENT,
-    TCP_SYN_RECV,
-    TCP_FIN_WAIT1,
-    TCP_FIN_WAIT2,
-    TCP_TIME_WAIT,
-    TCP_CLOSE,
-    TCP_CLOSE_WAIT,
-    TCP_LAST_ACK,
-    TCP_LISTEN,
-    TCP_CLOSING
-};
-
-static const char* tcp_states_map[]={ // array of pointers
-    [TCP_ESTABLISHED] = "ESTABLISHED",
-    [TCP_SYN_SENT] = "SYN-SENT",
-    [TCP_SYN_RECV] = "SYN-RECV",
-    [TCP_FIN_WAIT1] = "FIN-WAIT-1",
-    [TCP_FIN_WAIT2] = "FIN-WAIT-2",
-    [TCP_TIME_WAIT] = "TIME-WAIT",
-    [TCP_CLOSE] = "CLOSE",
-    [TCP_CLOSE_WAIT] = "CLOSE-WAIT",
-    [TCP_LAST_ACK] = "LAST-ACK",
-    [TCP_LISTEN] = "LISTEN",
-    [TCP_CLOSING] = "CLOSING"
-};
-
 #define TCPF_ALL 0xFFF
 
 int main(int argc, char *argv[]) { // takes no args for now, replace with (int argc, char *argv[]) later
@@ -74,7 +44,7 @@ int main(int argc, char *argv[]) { // takes no args for now, replace with (int a
 		.sdiag_family   = AF_INET,
 		.sdiag_protocol = IPPROTO_TCP,
 		.idiag_ext      = (1 << (INET_DIAG_INFO - 1)), // see the "if (tcp_info)" line in "net/ipv4/inet_diag.c
-		.idiag_states   = 0xFFF, // TCPF_ALL
+		.idiag_states   = TCPF_ALL,
 	};
 	iov[1].iov_base = (void *) &nlreq;     //inet_diag_req_v2 is encapsulated in the msghdr
 	iov[1].iov_len  = sizeof(nlreq);
