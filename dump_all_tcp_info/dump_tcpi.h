@@ -1,9 +1,43 @@
-#include <stdio.h>
-#include <linux/tcp.h>
+#ifndef DUMP_TCP_I_H
+#define DUMP_TCP_I_H
 
-int dump_tcp_info_struct(struct tcp_info* tcpi) {
-	printf("state:%ld ca_state:%ld retransmits:%ld probes:%ld backoff:%ld options:%ld snd_wscale:%ld rcv_wscale:%ld delivery_rate_app_limited:%ld rto:%ld ato:%ld snd_mss:%ld rcv_mss:%ld unacked:%ld sacked:%ld lost:%ld retrans:%ld fackets:%ld last_data_sent:%ld last_ack_sent:%ld last_data_recv:%ld last_ack_recv:%ld pmtu:%ld rcv_ssthresh:%ld rtt:%ld rttvar:%ld snd_ssthresh:%ld snd_cwnd:%ld advmss:%ld reordering:%ld rcv_rtt:%ld rcv_space:%ld total_retrans:%ld pacing_rate:%ld max_pacing_rate:%ld bytes_acked:%ld bytes_received:%ld segs_out:%ld segs_in:%ld notsent_bytes:%ld min_rtt:%ld data_segs_in:%ld data_segs_out:%ld delivery_rate:%ld busy_time:%ld rwnd_limited:%ld sndbuf_limited:%ld delivered:%ld delivered_ce:%ld bytes_sent:%ld bytes_retrans:%ld dsack_dups:%ld reord_seen:%ld\n",
-                       tcpi->tcpi_state,
+#include <linux/tcp.h>
+#include <stdio.h>
+
+//Kernel TCP states. /include/net/tcp_states.h
+enum{
+    TCP_ESTABLISHED = 1,
+    TCP_SYN_SENT,
+    TCP_SYN_RECV,
+    TCP_FIN_WAIT1,
+    TCP_FIN_WAIT2,
+    TCP_TIME_WAIT,
+    TCP_CLOSE,
+    TCP_CLOSE_WAIT,
+    TCP_LAST_ACK,
+    TCP_LISTEN,
+    TCP_CLOSING
+};
+
+static const char* tcp_states_map[]={ // array of pointers
+    [TCP_ESTABLISHED] = "ESTABLISHED",
+    [TCP_SYN_SENT] = "SYN-SENT",
+    [TCP_SYN_RECV] = "SYN-RECV",
+    [TCP_FIN_WAIT1] = "FIN-WAIT-1",
+    [TCP_FIN_WAIT2] = "FIN-WAIT-2",
+    [TCP_TIME_WAIT] = "TIME-WAIT",
+    [TCP_CLOSE] = "CLOSE",
+    [TCP_CLOSE_WAIT] = "CLOSE-WAIT",
+    [TCP_LAST_ACK] = "LAST-ACK",
+    [TCP_LISTEN] = "LISTEN",
+    [TCP_CLOSING] = "CLOSING"
+};
+
+int dump_tcpi(struct tcp_info* tcpi);
+
+int dump_tcpi(struct tcp_info* tcpi) {
+	printf("state:%s ca_state:%u retransmits:%u probes:%u backoff:%u options:%u snd_wscale:%u rcv_wscale:%u delivery_rate_app_limited:%u rto:%u ato:%u snd_mss:%u rcv_mss:%u unacked:%u sacked:%u lost:%u retrans:%u fackets:%u last_data_sent:%u last_ack_sent:%u last_data_recv:%u last_ack_recv:%u pmtu:%u rcv_ssthresh:%u rtt:%u rttvar:%u snd_ssthresh:%u snd_cwnd:%u advmss:%u reordering:%u rcv_rtt:%u rcv_space:%u total_retrans:%u pacing_rate:%Lu max_pacing_rate:%Lu bytes_acked:%Lu bytes_received:%Lu segs_out:%u segs_in:%u notsent_bytes:%u min_rtt:%u data_segs_in:%u data_segs_out:%u delivery_rate:%Lu busy_time:%Lu rwnd_limited:%Lu sndbuf_limited:%Lu delivered:%u delivered_ce:%u bytes_sent:%Lu bytes_retrans:%Lu dsack_dups:%u reord_seen:%u ",
+                       tcp_states_map[tcpi->tcpi_state],
                        tcpi->tcpi_ca_state,
                        tcpi->tcpi_retransmits,
                        tcpi->tcpi_probes,
@@ -58,3 +92,4 @@ int dump_tcp_info_struct(struct tcp_info* tcpi) {
                        tcpi->tcpi_reord_seen);
 	               return 0;
 }
+#endif

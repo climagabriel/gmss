@@ -12,17 +12,35 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include "dump_tcp_info_struct.h"
-#include "dump_inet_diag_msg.h"
+#include "dump_tcpi.h"
 
 //inspired by libnml git://git.netfilter.org/libmnl
 #define SOCKET_BUFFER_SIZE ( sysconf(_SC_PAGESIZE) < 8192L ? sysconf(_SC_PAGESIZE) : 8192L )
 #define TCPF_ALL 0xFFF
 
-int main(int argc, char *argv[]) { // takes no args for now, replace with (int argc, char *argv[]) later
+//https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L13 inet_diag_msg
+//https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L86 inet_diag_msg.id is inet_diag_sockid
+void print4tuple(struct inet_diag_msg *msg) {
+	char src_ip_buf[INET6_ADDRSTRLEN];
+	char dst_ip_buf[INET6_ADDRSTRLEN]; // lazy, use if else to differentiate ipv4/6
+	int  src_port_buf;
+	int  dst_port_buf;
+
+	inet_ntop(AF_INET, &msg->id.idiag_src, src_ip_buf, sizeof(src_ip_buf));
+	inet_ntop(AF_INET, &msg->id.idiag_dst, dst_ip_buf, sizeof(dst_ip_buf));
+	src_port_buf = ntohs(msg->id.idiag_sport);
+	dst_port_buf = ntohs(msg->id.idiag_dport);
+
+
+	printf("src:%16s:%d ", src_ip_buf, src_port_buf);
+	printf("dst:%16s:%d ", dst_ip_buf, dst_port_buf);
+}
+
+int main(int argc, char *argv[]) { // TODO getopt_long for flags
 	//printf("%d\n", netlink_socket);
 	//char format = argv[1][0];
 	char format;
+//	fflush(stdout);
 	if (argc == 1) {
 		format = 'l';
 	} else { format = argv[1][0];
@@ -43,7 +61,7 @@ int main(int argc, char *argv[]) { // takes no args for now, replace with (int a
 	struct inet_diag_req_v2 nlreq = {
 		.sdiag_family   = AF_INET,
 		.sdiag_protocol = IPPROTO_TCP,
-		.idiag_ext      = (1 << (INET_DIAG_INFO - 1)), // see the "if (tcp_info)" line in "net/ipv4/inet_diag.c
+		.idiag_ext      = (1 << (INET_DIAG_INFO - 1)) | (1 << (INET_DIAG_CONG - 1)) , // see the "if (tcp_info)" line in "net/ipv4/inet_diag.c
 		.idiag_states   = TCPF_ALL,
 	};
 	iov[1].iov_base = (void *) &nlreq;     //inet_diag_req_v2 is encapsulated in the msghdr
@@ -66,28 +84,28 @@ int main(int argc, char *argv[]) { // takes no args for now, replace with (int a
 	uint8_t buf[SOCKET_BUFFER_SIZE]; // = {0}; ERROR variable-sized object may not be initialized
 	sendmsg(netlink_socket, &msg, 0);
 
-	int i = 0;
-
 	while(1) {
 		ssize_t msglen = recv(netlink_socket, buf, sizeof(buf), 0);
 		struct nlmsghdr *recvnlh = (struct nlmsghdr *) buf;
 		while(NLMSG_OK(recvnlh, msglen)) {
 			if(recvnlh->nlmsg_type == NLMSG_DONE) {
-				printf(" Done\n");
 				return EXIT_SUCCESS;
 			} else if(recvnlh->nlmsg_type == NLMSG_ERROR) { //Would NLMSG_OK equal 1 if there was an error?
 				printf("Error\n");
 				return EXIT_FAILURE;
 			}
 			struct inet_diag_msg *diag_msg = (struct inet_diag_msg *) NLMSG_DATA(recvnlh);
-			dump_inet_diag_msg(diag_msg);
 			struct rtattr *attr = (struct rtattr *) (diag_msg + 1);
 			unsigned int rtattrlen = recvnlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
 			while (RTA_OK(attr, rtattrlen)) {
 				if (attr->rta_type == INET_DIAG_INFO) {
 					struct tcp_info *tcpi = (struct tcp_info *) RTA_DATA(attr);
-					//https://elixir.bootlin.com/linux/v5.3.8/source/include/uapi/linux/tcp.h#L206
-					dump_tcp_info_struct(tcpi, format);
+					// include/uapi/linux/tcp.h#L206
+					print4tuple(diag_msg);
+					dump_tcpi(tcpi);
+				} else if (attr->rta_type == INET_DIAG_CONG) {
+					char *cong = RTA_DATA(attr);
+					printf("cong: %s\n\n", cong);
 				}
 				attr = RTA_NEXT(attr, rtattrlen);
 			}
