@@ -12,6 +12,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
+#include <getopt.h>
 
 //inspired by libnml git://git.netfilter.org/libmnl
 #define SOCKET_BUFFER_SIZE ( sysconf(_SC_PAGESIZE) < 8192L ? sysconf(_SC_PAGESIZE) : 8192L )
@@ -33,7 +35,7 @@ enum{
 };
 
 static const char* tcp_states_map[]={ // array of pointers
-    [TCP_ESTABLISHED] = "ESTABLISHED",
+    [TCP_ESTABLISHED] = "ESTAB",
     [TCP_SYN_SENT] = "SYN-SENT",
     [TCP_SYN_RECV] = "SYN-RECV",
     [TCP_FIN_WAIT1] = "FIN-WAIT-1",
@@ -46,27 +48,11 @@ static const char* tcp_states_map[]={ // array of pointers
     [TCP_CLOSING] = "CLOSING"
 };
 
-int print_mss(struct tcp_info* tcpi);
-
-int print_mss(struct tcp_info* tcpi) {
-	printf("state:%s snd_mss:%u rcv_mss:%u pmtu:%u retrans:%u snd_cwnd:%u advmss:%u rwnd_limited:%Lu sndbuf_limited:%Lu ",
-		       tcp_states_map[tcpi->tcpi_state],
-                       tcpi->tcpi_snd_mss,
-                       tcpi->tcpi_rcv_mss,
-                       tcpi->tcpi_pmtu,
-                       tcpi->tcpi_retransmits,
-                       tcpi->tcpi_snd_cwnd,
-                       tcpi->tcpi_advmss,
-                       tcpi->tcpi_rwnd_limited,
-                       tcpi->tcpi_sndbuf_limited);
-	               return 0;
-}
-
-void dump_inet_diag_msg(struct inet_diag_msg *msg);
+void print4tuple(struct inet_diag_msg *msg);
 
 //https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L13 inet_diag_msg
 //https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L86 inet_diag_msg.id is inet_diag_sockid
-void dump_inet_diag_msg(struct inet_diag_msg *msg) {
+void print4tuple(struct inet_diag_msg *msg) {
 	char src_ip_buf[INET6_ADDRSTRLEN];
 	char dst_ip_buf[INET6_ADDRSTRLEN]; // lazy, use if else to differentiate ipv4/6
 	int  src_port_buf;
@@ -77,20 +63,25 @@ void dump_inet_diag_msg(struct inet_diag_msg *msg) {
 	src_port_buf = ntohs(msg->id.idiag_sport);
 	dst_port_buf = ntohs(msg->id.idiag_dport);
 
-
 	printf("src:%16s:%d ", src_ip_buf, src_port_buf);
-	printf("dst:%16s:%d \n", dst_ip_buf, dst_port_buf);
+	printf("dst:%16s:%d ", dst_ip_buf, dst_port_buf);
+}
+
+int print_mss(struct tcp_info* tcpi) {
+	printf("state:%s retrans:%u snd_mss:%u rcv_mss:%u advmss:%u pmtu:%u snd_cwnd:%u rwnd_limited:%Lu sndbuf_limited:%Lu ",
+		       tcp_states_map[tcpi->tcpi_state],
+                       tcpi->tcpi_retransmits,
+                       tcpi->tcpi_snd_mss,
+                       tcpi->tcpi_rcv_mss,
+                       tcpi->tcpi_advmss,
+                       tcpi->tcpi_pmtu,
+                       tcpi->tcpi_snd_cwnd,
+                       tcpi->tcpi_rwnd_limited,
+                       tcpi->tcpi_sndbuf_limited);
+	               return 0;
 }
 
 int main(int argc, char *argv[]) { // TODO getopt_long for flags
-	//printf("%d\n", netlink_socket);
-	//char format = argv[1][0];
-	char format;
-//	fflush(stdout);
-	if (argc == 1) {
-		format = 'l';
-	} else { format = argv[1][0];
-	}
 
 	struct iovec iov[2] = {0};
 
@@ -141,18 +132,15 @@ int main(int argc, char *argv[]) { // TODO getopt_long for flags
 				return EXIT_FAILURE;
 			}
 			struct inet_diag_msg *diag_msg = (struct inet_diag_msg *) NLMSG_DATA(recvnlh);
-			dump_inet_diag_msg(diag_msg);
 			struct rtattr *attr = (struct rtattr *) (diag_msg + 1);
 			unsigned int rtattrlen = recvnlh->nlmsg_len - NLMSG_LENGTH(sizeof(*diag_msg));
 			while (RTA_OK(attr, rtattrlen)) {
 				if (attr->rta_type == INET_DIAG_INFO) {
 					struct tcp_info *tcpi = (struct tcp_info *) RTA_DATA(attr);
-					//https://elixir.bootlin.com/linux/v5.3.8/source/include/uapi/linux/tcp.h#L206
-					print_mss(tcpi);
-				} else if (attr->rta_type == INET_DIAG_CONG) {
-					char *cong = RTA_DATA(attr);
-					printf("cong: %s\n\n", cong);
-				}
+					print4tuple(diag_msg);
+					print_mss(tcpi); // include/uapi/linux/tcp.h#L206
+				} else if (attr->rta_type == INET_DIAG_CONG)
+					printf("congestion_control: %s\n\n", (char *) RTA_DATA(attr));
 				attr = RTA_NEXT(attr, rtattrlen);
 			}
 			recvnlh = NLMSG_NEXT(recvnlh, msglen);
