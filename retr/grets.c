@@ -32,6 +32,7 @@ struct socket_retr {
 	unsigned long bytes_sent;
 	float retr_ratio;
 	char isp[128];
+	uint32_t ASN;
 };
 
 int socket_count = 0;
@@ -60,6 +61,12 @@ void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg, MMDB_s mm
 		if (entry_data.has_data) {
 			strncpy(entry->isp, entry_data.utf8_string, entry_data.data_size);
 		} else strcpy(entry->isp, "unknow");
+
+		MMDB_entry_data_s entry_data_asn;
+		int status_get_asn = MMDB_get_value(&result.entry, &entry_data_asn, "autonomous_system_number", NULL);
+		if (status_get_asn != MMDB_SUCCESS) fprintf(stderr, "MMDB_get_value failed\n");
+		if (entry_data.has_data)
+			entry->ASN = entry_data_asn.uint32;
 	}
 }
 
@@ -78,8 +85,9 @@ void print_list() {
 		printf("%16s ",    entry->dst_ip);
 		printf("%16lu ",     entry->bytes_retr);
 		printf("%16lu ",     entry->bytes_sent);
-		printf("%4.2f%%", entry->retr_ratio);
-		printf(" %s\n", entry->isp);
+		printf("%6.2f%% ", entry->retr_ratio);
+		printf("%u ", entry->ASN);
+		printf("%s\n", entry->isp);
 	}
 }
 
