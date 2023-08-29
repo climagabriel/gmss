@@ -24,7 +24,6 @@
 //https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L13 inet_diag_msg
 //https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L86 inet_diag_msg.id is inet_diag_sockid
 
-
 struct socket_retr {
 	char src_ip[INET6_ADDRSTRLEN];
 	char dst_ip[INET6_ADDRSTRLEN];
@@ -33,12 +32,14 @@ struct socket_retr {
 	float retr_ratio;
 	char isp[128];
 	uint32_t ASN;
+	unsigned int snd_mss;
+	unsigned int rcv_mss;
+	unsigned int advmss;
+	unsigned int pmtu;
 };
 
 int socket_count = 0;
 struct socket_retr retr_list[65535]; // TODO dynamic
-
-MMDB_s mmdb;
 
 void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg, MMDB_s mmdb) {
 
@@ -67,13 +68,20 @@ void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg, MMDB_s mm
 		if (status_get_asn != MMDB_SUCCESS) fprintf(stderr, "MMDB_get_value failed\n");
 		if (entry_data.has_data)
 			entry->ASN = entry_data_asn.uint32;
+
+		entry->snd_mss = tcpi->tcpi_snd_mss;
+		entry->rcv_mss = tcpi->tcpi_rcv_mss;
+		entry->advmss = tcpi->tcpi_advmss;
+		entry->pmtu = tcpi->tcpi_pmtu;
+
 	}
 }
 
 int compare(const void *a, const void *b) {
 	struct socket_retr *entry_a = (struct socket_retr *) a;
 	struct socket_retr *entry_b = (struct socket_retr *) b;
-	return (entry_a->bytes_retr - entry_b->bytes_retr);
+	//return (entry_a->bytes_retr - entry_b->bytes_retr);
+	return (entry_a->retr_ratio - entry_b->retr_ratio);
 }
 
 void print_list() {
@@ -86,9 +94,29 @@ void print_list() {
 		printf("%16lu ",     entry->bytes_retr);
 		printf("%16lu ",     entry->bytes_sent);
 		printf("%6.2f%% ", entry->retr_ratio);
-		printf("%u ", entry->ASN);
-		printf("%s\n", entry->isp);
+		printf("%4u ", entry->snd_mss);
+		printf("%7u ", entry->rcv_mss);
+		printf("%6u ", entry->advmss);
+		printf("%5u ", entry->pmtu);
+		printf("%6u ", entry->ASN);
+		printf("%6s ", entry->isp);
+		printf("\n");
 	}
+}
+
+void print_legend() {
+		printf("%16s ",    "src_ip");
+		printf("%16s ",    "dst_ip");
+		printf("%16s ",    "bytes_retr");
+		printf("%16s ",   "bytes_sent");
+		printf("%5s ", "  retr%");
+		printf("%7s ", "sndmss");
+		printf("%7s ", "rcvmss");
+		printf("%6s ", "advmss");
+		printf("%5s ", "pmtu");
+		printf("%6s ", "ASN");
+		printf("%6s ", "isp");
+		printf("\n");
 }
 
 int main(int argc, char *argv[]) { // TODO getopt_long for flags
@@ -145,6 +173,7 @@ int main(int argc, char *argv[]) { // TODO getopt_long for flags
 		while(NLMSG_OK(recvnlh, msglen)) {
 			if(recvnlh->nlmsg_type == NLMSG_DONE){
 				print_list();
+				print_legend();
 				return EXIT_SUCCESS;
 			}
 			else if(recvnlh->nlmsg_type == NLMSG_ERROR)
