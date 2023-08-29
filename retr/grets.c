@@ -15,6 +15,7 @@
 #include <string.h>
 #include <getopt.h>
 #include <limits.h>
+#include <maxminddb.h>
 
 //inspired by libnml git://git.netfilter.org/libmnl
 #define SOCKET_BUFFER_SIZE ( sysconf(_SC_PAGESIZE) < 8192L ? sysconf(_SC_PAGESIZE) : 8192L )
@@ -23,19 +24,23 @@
 //https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L13 inet_diag_msg
 //https://elixir.bootlin.com/linux/v3.8/source/include/uapi/linux/inet_diag.h#L86 inet_diag_msg.id is inet_diag_sockid
 
+
 struct socket_retr {
 	char src_ip[INET6_ADDRSTRLEN];
 	char dst_ip[INET6_ADDRSTRLEN];
 	unsigned long bytes_retr;
 	unsigned long bytes_sent;
 	float retr_ratio;
+	char isp[128];
 };
 
 int socket_count = 0;
-
 struct socket_retr retr_list[65535]; // TODO dynamic
 
-void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg) {
+MMDB_s mmdb;
+
+void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg, MMDB_s mmdb) {
+
 	if ( (tcpi->tcpi_bytes_sent != 0) && (tcpi->tcpi_bytes_retrans != 0) ) {
 		struct socket_retr *entry = &retr_list[socket_count++];
 		inet_ntop(AF_INET, &diag_msg->id.idiag_src, entry->src_ip, INET6_ADDRSTRLEN);
@@ -43,6 +48,18 @@ void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg) {
 		entry->bytes_retr = tcpi->tcpi_bytes_retrans;
 		entry->bytes_sent = tcpi->tcpi_bytes_sent;
 		entry->retr_ratio = ((tcpi->tcpi_bytes_retrans * 100.0) / tcpi->tcpi_bytes_sent );
+
+		int gai_error, mmdb_error;
+		MMDB_lookup_result_s result = MMDB_lookup_string(&mmdb, entry->dst_ip, &gai_error, &mmdb_error);
+		if (gai_error != 0) fprintf(stderr, "Error from getaddrinfo for %s\n", entry->dst_ip);
+		if (mmdb_error != MMDB_SUCCESS) fprintf(stderr, "mmdb_error: %s\n", MMDB_strerror(mmdb_error));
+
+		MMDB_entry_data_s entry_data;
+		int status = MMDB_get_value(&result.entry, &entry_data, "isp", NULL);
+		if (status != MMDB_SUCCESS) fprintf(stderr, "MMDB_get_value failed\n");
+		if (entry_data.has_data) {
+			strncpy(entry->isp, entry_data.utf8_string, entry_data.data_size);
+		} else strcpy(entry->isp, "unknow");
 	}
 }
 
@@ -59,13 +76,21 @@ void print_list() {
 		struct socket_retr *entry = &retr_list[i];
 		printf("%16s ",    entry->src_ip);
 		printf("%16s ",    entry->dst_ip);
-		printf("%lu ",     entry->bytes_retr);
-		printf("%lu ",     entry->bytes_sent);
-		printf("%.0f%%\n", entry->retr_ratio);
+		printf("%16lu ",     entry->bytes_retr);
+		printf("%16lu ",     entry->bytes_sent);
+		printf("%4.2f%%", entry->retr_ratio);
+		printf(" %s\n", entry->isp);
 	}
 }
 
 int main(int argc, char *argv[]) { // TODO getopt_long for flags
+
+	MMDB_s mmdb;
+	int status = MMDB_open("/usr/share/GeoIP/GeoIP2-ISP.mmdb", MMDB_MODE_MMAP, &mmdb);
+	if (MMDB_SUCCESS != status) {
+		fprintf(stderr, "\n Can't open %s - %s\n", "/usr/share/GeoIP/GeoIP2-ISP.mmdb", MMDB_strerror(status));
+		return EXIT_FAILURE;
+	}
 
 	struct iovec iov[2] = {0};
 
@@ -109,14 +134,12 @@ int main(int argc, char *argv[]) { // TODO getopt_long for flags
 	while(1) {
 		ssize_t msglen = recv(netlink_socket, buf, sizeof(buf), 0);
 		struct nlmsghdr *recvnlh = (struct nlmsghdr *) buf;
-//		for (int i = 0; NLMSG_OK(recvnlh, msglen); i++) {
 		while(NLMSG_OK(recvnlh, msglen)) {
 			if(recvnlh->nlmsg_type == NLMSG_DONE){
-				printf("check\n");
 				print_list();
 				return EXIT_SUCCESS;
 			}
-			else if(recvnlh->nlmsg_type == NLMSG_ERROR) //Would NLMSG_OK equal 1 if there was an error?
+			else if(recvnlh->nlmsg_type == NLMSG_ERROR)
 				return EXIT_FAILURE;
 			struct inet_diag_msg *diag_msg = (struct inet_diag_msg *) NLMSG_DATA(recvnlh);
 			struct rtattr *attr = (struct rtattr *) (diag_msg + 1);
@@ -124,11 +147,10 @@ int main(int argc, char *argv[]) { // TODO getopt_long for flags
 			while (RTA_OK(attr, rtattrlen)) {
 				if (attr->rta_type == INET_DIAG_INFO) {
 					struct tcp_info *tcpi = (struct tcp_info *) RTA_DATA(attr);
-					store_retr(tcpi, diag_msg); // include/uapi/linux/tcp.h#L206
+					store_retr(tcpi, diag_msg, mmdb); // include/uapi/linux/tcp.h#L206
 				}
 				attr = RTA_NEXT(attr, rtattrlen);
 			}
-			//printf("%d\n", i);
 			recvnlh = NLMSG_NEXT(recvnlh, msglen);
 		}
 	}
