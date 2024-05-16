@@ -39,7 +39,7 @@ struct socket_retr {
 };
 
 int socket_count = 0;
-struct socket_retr retr_list[65535]; // TODO dynamic
+struct socket_retr retr_list[6553500]; // TODO dynamic
 
 void store_retr(struct tcp_info* tcpi, struct inet_diag_msg *diag_msg, MMDB_s mmdb) {
 
