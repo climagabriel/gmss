@@ -1,6 +1,6 @@
 all: grets
 
 grets: grets.c
-	gcc -static grets.c -o grets
+	gcc -lmaxminddb -static grets.c -o grets
 clean:
 	rm -f grets
